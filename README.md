@@ -66,6 +66,8 @@ It specifically checks for:
 - **LICENSE**: Using the `License` endpoint.
 - **CI (GitHub Actions)**: Checks for the presence of YAML files in `.github/workflows`.
 - **Automated Tests**: Scans workflow files for test commands (e.g., `go test`, `npm test`).
+- **Dependency Analysis**: Parses `go.mod` to identify direct dependencies.
+- **Security Scanning**: Integrates with the [OSV.dev API](https://osv.dev/) to check for known vulnerabilities in the used libraries.
 
 ## License
 
