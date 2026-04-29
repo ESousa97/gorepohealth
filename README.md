@@ -64,6 +64,8 @@ The tool uses the [google/go-github](https://github.com/google/go-github) librar
 It specifically checks for:
 - **README**: Using the `GetReadme` endpoint.
 - **LICENSE**: Using the `License` endpoint.
+- **CI (GitHub Actions)**: Checks for the presence of YAML files in `.github/workflows`.
+- **Automated Tests**: Scans workflow files for test commands (e.g., `go test`, `npm test`).
 
 ## License
 

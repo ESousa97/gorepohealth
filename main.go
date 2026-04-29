@@ -51,11 +51,15 @@ func main() {
 	fmt.Println("\nSummary:")
 	fmt.Printf("- README: %s\n", formatResult(health.HasReadme))
 	fmt.Printf("- LICENSE: %s\n", formatResult(health.HasLicense))
+	fmt.Printf("- CI (GitHub Actions): %s\n", formatResult(health.HasCI))
+	fmt.Printf("- Automated Tests: %s\n", formatResult(health.HasAutoTest))
 }
 
 type RepoHealth struct {
-	HasReadme  bool
-	HasLicense bool
+	HasReadme   bool
+	HasLicense  bool
+	HasCI       bool
+	HasAutoTest bool
 }
 
 func checkRepoHealth(ctx context.Context, client *github.Client, owner, repo string) (*RepoHealth, error) {
@@ -75,6 +79,25 @@ func checkRepoHealth(ctx context.Context, client *github.Client, owner, repo str
 		health.HasLicense = true
 	} else if githubErr, ok := err.(*github.ErrorResponse); ok && githubErr.Response.StatusCode != 404 {
 		return nil, fmt.Errorf("failed to check LICENSE: %w", err)
+	}
+
+	// Check for GitHub Actions (CI)
+	_, dirContent, _, err := client.Repositories.GetContents(ctx, owner, repo, ".github/workflows", nil)
+	if err == nil && len(dirContent) > 0 {
+		health.HasCI = true
+		// Look for tests in workflows
+		for _, file := range dirContent {
+			if strings.HasSuffix(file.GetName(), ".yml") || strings.HasSuffix(file.GetName(), ".yaml") {
+				content, _, _, err := client.Repositories.GetContents(ctx, owner, repo, file.GetPath(), nil)
+				if err == nil && content != nil {
+					raw, _ := content.GetContent()
+					if strings.Contains(raw, "go test") || strings.Contains(raw, "npm test") || strings.Contains(raw, "pytest") || strings.Contains(raw, "test") {
+						health.HasAutoTest = true
+						break
+					}
+				}
+			}
+		}
 	}
 
 	return health, nil
