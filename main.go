@@ -52,11 +52,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	health.calculateScore()
+	
 	fmt.Println("\nSummary:")
 	fmt.Printf("- README: %s\n", formatResult(health.HasReadme))
 	fmt.Printf("- LICENSE: %s\n", formatResult(health.HasLicense))
 	fmt.Printf("- CI (GitHub Actions): %s\n", formatResult(health.HasCI))
 	fmt.Printf("- Automated Tests: %s\n", formatResult(health.HasAutoTest))
+	fmt.Printf("- Health Score: %d/100\n", health.Score)
 
 	fmt.Printf("\nDependencies & Security:\n")
 	if len(health.Vulnerabilities) == 0 {
@@ -66,6 +69,14 @@ func main() {
 			fmt.Printf("  [!] ALERT: %s (version %s) has vulnerability: %s\n", v.Package, v.Version, v.ID)
 		}
 	}
+
+	reportPath := "health_report.md"
+	err = health.generateReport(owner, repoName, reportPath)
+	if err != nil {
+		fmt.Printf("Error generating report: %v\n", err)
+	} else {
+		fmt.Printf("\nDetailed report generated: %s\n", reportPath)
+	}
 }
 
 type RepoHealth struct {
@@ -74,6 +85,75 @@ type RepoHealth struct {
 	HasCI           bool
 	HasAutoTest      bool
 	Vulnerabilities []Vulnerability
+	Score           int
+	Suggestions     []string
+}
+
+func (h *RepoHealth) calculateScore() {
+	h.Score = 0
+	h.Suggestions = []string{}
+
+	if h.HasReadme {
+		h.Score += 10
+	} else {
+		h.Suggestions = append(h.Suggestions, "Add a README.md file to document your project.")
+	}
+
+	if h.HasLicense {
+		h.Score += 10
+	} else {
+		h.Suggestions = append(h.Suggestions, "Add a LICENSE file to define how others can use your code.")
+	}
+
+	if h.HasCI {
+		h.Score += 15
+	} else {
+		h.Suggestions = append(h.Suggestions, "Configure GitHub Actions to automate your build and CI process.")
+	}
+
+	if h.HasAutoTest {
+		h.Score += 15
+	} else {
+		h.Suggestions = append(h.Suggestions, "Implement automated tests and ensure they are running in your CI/CD pipeline.")
+	}
+
+	if len(h.Vulnerabilities) == 0 {
+		h.Score += 50
+	} else {
+		h.Suggestions = append(h.Suggestions, "Fix identified security vulnerabilities in your dependencies.")
+	}
+}
+
+func (h *RepoHealth) generateReport(owner, repo, path string) error {
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("# Health Report: %s/%s\n\n", owner, repo))
+	buf.WriteString(fmt.Sprintf("## Overall Score: **%d/100**\n\n", h.Score))
+	
+	buf.WriteString("### Analysis Breakdown\n")
+	buf.WriteString(fmt.Sprintf("- **README:** %s\n", formatResult(h.HasReadme)))
+	buf.WriteString(fmt.Sprintf("- **LICENSE:** %s\n", formatResult(h.HasLicense)))
+	buf.WriteString(fmt.Sprintf("- **CI (GitHub Actions):** %s\n", formatResult(h.HasCI)))
+	buf.WriteString(fmt.Sprintf("- **Automated Tests:** %s\n", formatResult(h.HasAutoTest)))
+	buf.WriteString(fmt.Sprintf("- **Security (Vulnerabilities):** %s\n\n", formatResult(len(h.Vulnerabilities) == 0)))
+
+	if len(h.Vulnerabilities) > 0 {
+		buf.WriteString("### Security Alerts\n")
+		for _, v := range h.Vulnerabilities {
+			buf.WriteString(fmt.Sprintf("- [!] %s (%s): %s\n", v.Package, v.Version, v.ID))
+		}
+		buf.WriteString("\n")
+	}
+
+	buf.WriteString("### Suggestions for Improvement\n")
+	if len(h.Suggestions) == 0 {
+		buf.WriteString("Great job! Your repository follows all checked health standards.\n")
+	} else {
+		for _, s := range h.Suggestions {
+			buf.WriteString(fmt.Sprintf("- [ ] %s\n", s))
+		}
+	}
+
+	return os.WriteFile(path, buf.Bytes(), 0644)
 }
 
 type Vulnerability struct {

@@ -68,6 +68,8 @@ It specifically checks for:
 - **Automated Tests**: Scans workflow files for test commands (e.g., `go test`, `npm test`).
 - **Dependency Analysis**: Parses `go.mod` to identify direct dependencies.
 - **Security Scanning**: Integrates with the [OSV.dev API](https://osv.dev/) to check for known vulnerabilities in the used libraries.
+- **Health Scoring**: Calculates an overall health score (0-100) based on weighted criteria (README, License, CI, Tests, and Security).
+- **Markdown Reporting**: Generates a detailed `health_report.md` with the score, analysis breakdown, and suggestions for improvement.
 
 ## License
 
