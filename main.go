@@ -3,83 +3,29 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-github/v62/github"
+	"github.com/olekukonko/tablewriter"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/oauth2"
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: gorepohealth <owner/repo>")
-		os.Exit(1)
-	}
-
-	repoPath := os.Args[1]
-	parts := strings.Split(repoPath, "/")
-	if len(parts) != 2 {
-		fmt.Println("Invalid repository format. Use owner/repo")
-		os.Exit(1)
-	}
-
-	owner := parts[0]
-	repoName := parts[1]
-
-	token := os.Getenv("GITHUB_TOKEN")
-	if token == "" {
-		fmt.Println("Error: GITHUB_TOKEN environment variable not set")
-		os.Exit(1)
-	}
-
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: token},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-
-	client := github.NewClient(tc)
-
-	fmt.Printf("Checking health for: %s/%s\n", owner, repoName)
-
-	health, err := checkRepoHealth(ctx, client, owner, repoName)
-	if err != nil {
-		fmt.Printf("Error checking repository: %v\n", err)
-		os.Exit(1)
-	}
-
-	health.calculateScore()
-	
-	fmt.Println("\nSummary:")
-	fmt.Printf("- README: %s\n", formatResult(health.HasReadme))
-	fmt.Printf("- LICENSE: %s\n", formatResult(health.HasLicense))
-	fmt.Printf("- CI (GitHub Actions): %s\n", formatResult(health.HasCI))
-	fmt.Printf("- Automated Tests: %s\n", formatResult(health.HasAutoTest))
-	fmt.Printf("- Health Score: %d/100\n", health.Score)
-
-	fmt.Printf("\nDependencies & Security:\n")
-	if len(health.Vulnerabilities) == 0 {
-		fmt.Println("  [OK] No known vulnerabilities found in direct dependencies.")
-	} else {
-		for _, v := range health.Vulnerabilities {
-			fmt.Printf("  [!] ALERT: %s (version %s) has vulnerability: %s\n", v.Package, v.Version, v.ID)
-		}
-	}
-
-	reportPath := "health_report.md"
-	err = health.generateReport(owner, repoName, reportPath)
-	if err != nil {
-		fmt.Printf("Error generating report: %v\n", err)
-	} else {
-		fmt.Printf("\nDetailed report generated: %s\n", reportPath)
-	}
+type Vulnerability struct {
+	Package string
+	Version string
+	ID      string
 }
 
 type RepoHealth struct {
+	Name            string
 	HasReadme       bool
 	HasLicense      bool
 	HasCI           bool
@@ -89,6 +35,88 @@ type RepoHealth struct {
 	Suggestions     []string
 }
 
+func main() {
+	exportCSV := flag.String("export", "", "Export results to CSV (e.g., --export=results.csv)")
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 1 {
+		fmt.Println("Usage: gorepohealth [options] <owner/repo> or <owner>")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	target := args[0]
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		fmt.Println("Error: GITHUB_TOKEN environment variable not set")
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	tc := oauth2.NewClient(ctx, ts)
+	client := github.NewClient(tc)
+
+	var reposToAnalyze []string
+	var owner string
+
+	if strings.Contains(target, "/") {
+		reposToAnalyze = append(reposToAnalyze, target)
+		parts := strings.Split(target, "/")
+		owner = parts[0]
+	} else {
+		owner = target
+		fmt.Printf("Fetching all public repositories for user: %s...\n", owner)
+		opt := &github.RepositoryListOptions{Type: "public", ListOptions: github.ListOptions{PerPage: 100}}
+		repos, _, err := client.Repositories.List(ctx, owner, opt)
+		if err != nil {
+			fmt.Printf("Error fetching repositories: %v\n", err)
+			os.Exit(1)
+		}
+		for _, r := range repos {
+			reposToAnalyze = append(reposToAnalyze, fmt.Sprintf("%s/%s", owner, r.GetName()))
+		}
+	}
+
+	results := []RepoHealth{}
+	for _, repoPath := range reposToAnalyze {
+		parts := strings.Split(repoPath, "/")
+		repoOwner := parts[0]
+		repoName := parts[1]
+		fmt.Printf("Analyzing %s...\n", repoPath)
+		health, err := checkRepoHealth(ctx, client, repoOwner, repoName)
+		if err != nil {
+			fmt.Printf("  Error analyzing %s: %v\n", repoName, err)
+			continue
+		}
+		health.Name = repoName
+		health.calculateScore()
+		results = append(results, *health)
+	}
+
+	displayDashboard(results)
+
+	if *exportCSV != "" {
+		err := exportToCSV(results, *exportCSV)
+		if err != nil {
+			fmt.Printf("Error exporting to CSV: %v\n", err)
+		} else {
+			fmt.Printf("Results exported to %s\n", *exportCSV)
+		}
+	}
+
+	if len(reposToAnalyze) == 1 {
+		reportPath := "health_report.md"
+		err := results[0].generateReport(owner, results[0].Name, reportPath)
+		if err != nil {
+			fmt.Printf("Error generating report: %v\n", err)
+		} else {
+			fmt.Printf("\nDetailed report generated: %s\n", reportPath)
+		}
+	}
+}
+
 func (h *RepoHealth) calculateScore() {
 	h.Score = 0
 	h.Suggestions = []string{}
@@ -96,102 +124,129 @@ func (h *RepoHealth) calculateScore() {
 	if h.HasReadme {
 		h.Score += 10
 	} else {
-		h.Suggestions = append(h.Suggestions, "Add a README.md file to document your project.")
+		h.Suggestions = append(h.Suggestions, "Add a README.md")
 	}
 
 	if h.HasLicense {
 		h.Score += 10
 	} else {
-		h.Suggestions = append(h.Suggestions, "Add a LICENSE file to define how others can use your code.")
+		h.Suggestions = append(h.Suggestions, "Add a LICENSE")
 	}
 
 	if h.HasCI {
 		h.Score += 15
 	} else {
-		h.Suggestions = append(h.Suggestions, "Configure GitHub Actions to automate your build and CI process.")
+		h.Suggestions = append(h.Suggestions, "Configure CI")
 	}
 
 	if h.HasAutoTest {
 		h.Score += 15
 	} else {
-		h.Suggestions = append(h.Suggestions, "Implement automated tests and ensure they are running in your CI/CD pipeline.")
+		h.Suggestions = append(h.Suggestions, "Implement Tests")
 	}
 
 	if len(h.Vulnerabilities) == 0 {
 		h.Score += 50
 	} else {
-		h.Suggestions = append(h.Suggestions, "Fix identified security vulnerabilities in your dependencies.")
+		h.Suggestions = append(h.Suggestions, "Fix Vulnerabilities")
 	}
+}
+
+func displayDashboard(results []RepoHealth) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.Header("Repository", "Readme", "License", "CI", "Tests", "Security", "Score")
+
+	for _, r := range results {
+		secStatus := "OK"
+		if len(r.Vulnerabilities) > 0 {
+			secStatus = "VULN"
+		}
+
+		table.Append(
+			r.Name,
+			formatFound(r.HasReadme),
+			formatFound(r.HasLicense),
+			formatFound(r.HasCI),
+			formatFound(r.HasAutoTest),
+			secStatus,
+			strconv.Itoa(r.Score),
+		)
+	}
+	fmt.Println("\n--- Health Dashboard ---")
+	table.Render()
+}
+
+func formatFound(found bool) string {
+	if found {
+		return "YES"
+	}
+	return "NO"
+}
+
+func exportToCSV(results []RepoHealth, path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	writer.Write([]string{"Repository", "Readme", "License", "CI", "Tests", "Security_Vulns", "Score"})
+	for _, r := range results {
+		writer.Write([]string{
+			r.Name,
+			strconv.FormatBool(r.HasReadme),
+			strconv.FormatBool(r.HasLicense),
+			strconv.FormatBool(r.HasCI),
+			strconv.FormatBool(r.HasAutoTest),
+			strconv.Itoa(len(r.Vulnerabilities)),
+			strconv.Itoa(r.Score),
+		})
+	}
+	return nil
 }
 
 func (h *RepoHealth) generateReport(owner, repo, path string) error {
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("# Health Report: %s/%s\n\n", owner, repo))
 	buf.WriteString(fmt.Sprintf("## Overall Score: **%d/100**\n\n", h.Score))
-	
 	buf.WriteString("### Analysis Breakdown\n")
-	buf.WriteString(fmt.Sprintf("- **README:** %s\n", formatResult(h.HasReadme)))
-	buf.WriteString(fmt.Sprintf("- **LICENSE:** %s\n", formatResult(h.HasLicense)))
-	buf.WriteString(fmt.Sprintf("- **CI (GitHub Actions):** %s\n", formatResult(h.HasCI)))
-	buf.WriteString(fmt.Sprintf("- **Automated Tests:** %s\n", formatResult(h.HasAutoTest)))
-	buf.WriteString(fmt.Sprintf("- **Security (Vulnerabilities):** %s\n\n", formatResult(len(h.Vulnerabilities) == 0)))
+	buf.WriteString(fmt.Sprintf("- **README:** %v\n", h.HasReadme))
+	buf.WriteString(fmt.Sprintf("- **LICENSE:** %v\n", h.HasLicense))
+	buf.WriteString(fmt.Sprintf("- **CI (GitHub Actions):** %v\n", h.HasCI))
+	buf.WriteString(fmt.Sprintf("- **Automated Tests:** %v\n", h.HasAutoTest))
+	buf.WriteString(fmt.Sprintf("- **Security (Vulnerabilities):** %v\n\n", len(h.Vulnerabilities) == 0))
 
-	if len(h.Vulnerabilities) > 0 {
-		buf.WriteString("### Security Alerts\n")
-		for _, v := range h.Vulnerabilities {
-			buf.WriteString(fmt.Sprintf("- [!] %s (%s): %s\n", v.Package, v.Version, v.ID))
-		}
-		buf.WriteString("\n")
-	}
-
-	buf.WriteString("### Suggestions for Improvement\n")
-	if len(h.Suggestions) == 0 {
-		buf.WriteString("Great job! Your repository follows all checked health standards.\n")
-	} else {
+	if len(h.Suggestions) > 0 {
+		buf.WriteString("### Suggestions\n")
 		for _, s := range h.Suggestions {
-			buf.WriteString(fmt.Sprintf("- [ ] %s\n", s))
+			buf.WriteString(fmt.Sprintf("- %s\n", s))
 		}
 	}
-
 	return os.WriteFile(path, buf.Bytes(), 0644)
-}
-
-type Vulnerability struct {
-	Package string
-	Version string
-	ID      string
 }
 
 func checkRepoHealth(ctx context.Context, client *github.Client, owner, repo string) (*RepoHealth, error) {
 	health := &RepoHealth{}
-
-	// Check for README
 	_, _, err := client.Repositories.GetReadme(ctx, owner, repo, nil)
 	if err == nil {
 		health.HasReadme = true
-	} else if githubErr, ok := err.(*github.ErrorResponse); ok && githubErr.Response.StatusCode != 404 {
-		return nil, fmt.Errorf("failed to check README: %w", err)
 	}
-
-	// Check for License
 	_, _, err = client.Repositories.License(ctx, owner, repo)
 	if err == nil {
 		health.HasLicense = true
-	} else if githubErr, ok := err.(*github.ErrorResponse); ok && githubErr.Response.StatusCode != 404 {
-		return nil, fmt.Errorf("failed to check LICENSE: %w", err)
 	}
-
-	// Check for GitHub Actions (CI)
 	_, dirContent, _, err := client.Repositories.GetContents(ctx, owner, repo, ".github/workflows", nil)
 	if err == nil && len(dirContent) > 0 {
 		health.HasCI = true
-		// Look for tests in workflows
 		for _, file := range dirContent {
 			if strings.HasSuffix(file.GetName(), ".yml") || strings.HasSuffix(file.GetName(), ".yaml") {
 				content, _, _, err := client.Repositories.GetContents(ctx, owner, repo, file.GetPath(), nil)
 				if err == nil && content != nil {
 					raw, _ := content.GetContent()
-					if strings.Contains(raw, "go test") || strings.Contains(raw, "npm test") || strings.Contains(raw, "pytest") || strings.Contains(raw, "test") {
+					if strings.Contains(raw, "test") {
 						health.HasAutoTest = true
 						break
 					}
@@ -199,8 +254,6 @@ func checkRepoHealth(ctx context.Context, client *github.Client, owner, repo str
 			}
 		}
 	}
-
-	// Dependency Analysis (go.mod)
 	fileContent, _, _, err := client.Repositories.GetContents(ctx, owner, repo, "go.mod", nil)
 	if err == nil && fileContent != nil {
 		raw, _ := fileContent.GetContent()
@@ -223,7 +276,6 @@ func checkRepoHealth(ctx context.Context, client *github.Client, owner, repo str
 			}
 		}
 	}
-
 	return health, nil
 }
 
@@ -235,41 +287,24 @@ func checkOSV(pkg, version string) ([]string, error) {
 			Ecosystem string `json:"ecosystem"`
 		} `json:"package"`
 	}
-
 	query := osvQuery{Version: version}
 	query.Package.Name = pkg
 	query.Package.Ecosystem = "Go"
-
 	body, _ := json.Marshal(query)
 	resp, err := http.Post("https://api.osv.dev/v1/query", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("OSV API error: %d", resp.StatusCode)
-	}
-
 	var result struct {
 		Vulns []struct {
 			ID string `json:"id"`
 		} `json:"vulns"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
+	json.NewDecoder(resp.Body).Decode(&result)
 	var ids []string
 	for _, v := range result.Vulns {
 		ids = append(ids, v.ID)
 	}
 	return ids, nil
-}
-
-func formatResult(found bool) string {
-	if found {
-		return "Found"
-	}
-	return "Not Found"
 }

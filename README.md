@@ -70,6 +70,9 @@ It specifically checks for:
 - **Security Scanning**: Integrates with the [OSV.dev API](https://osv.dev/) to check for known vulnerabilities in the used libraries.
 - **Health Scoring**: Calculates an overall health score (0-100) based on weighted criteria (README, License, CI, Tests, and Security).
 - **Markdown Reporting**: Generates a detailed `health_report.md` with the score, analysis breakdown, and suggestions for improvement.
+- **Multi-Repo Analysis**: Analyze all public repositories for a specific user.
+- **Terminal Dashboard**: Compares health scores across multiple projects in a clean terminal table.
+- **CSV Export**: Save analysis results to a CSV file using the `--export` flag.
 
 ## License
 
