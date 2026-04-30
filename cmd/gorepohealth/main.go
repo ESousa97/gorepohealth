@@ -85,7 +85,7 @@ func main() {
 		results = append(results, *res)
 	}
 
-	displayDashboard(results)
+	report.DisplayDashboard(results)
 
 	if len(results) > 1 {
 		var totalScore int
@@ -121,4 +121,4 @@ func main() {
 			fmt.Printf("\nDetailed report generated: %s\n", reportPath)
 		}
 	}
-	}
+}
