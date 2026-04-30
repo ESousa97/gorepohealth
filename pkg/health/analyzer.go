@@ -15,7 +15,7 @@ type RepoHealth struct {
 	HasReadme       bool
 	HasLicense      bool
 	HasCI           bool
-	HasAutoTest      bool
+	HasAutoTest     bool
 	Vulnerabilities []security.Vulnerability
 	Score           int
 	Suggestions     []string
@@ -117,18 +117,21 @@ func checkVulnerabilities(ctx context.Context, client *github.Client, owner, rep
 	}
 
 	for _, req := range f.Require {
-		if req.Indirect {
-			continue
+		if !req.Indirect {
+			processDependency(req, h)
 		}
-		vulnIDs, err := security.CheckOSV(req.Mod.Path, req.Mod.Version)
-		if err == nil && len(vulnIDs) > 0 {
-			for _, vID := range vulnIDs {
-				h.Vulnerabilities = append(h.Vulnerabilities, security.Vulnerability{
-					Package: req.Mod.Path,
-					Version: req.Mod.Version,
-					ID:      vID,
-				})
-			}
+	}
+}
+
+func processDependency(req *modfile.Require, h *RepoHealth) {
+	vulnIDs, err := security.CheckOSV(req.Mod.Path, req.Mod.Version)
+	if err == nil && len(vulnIDs) > 0 {
+		for _, vID := range vulnIDs {
+			h.Vulnerabilities = append(h.Vulnerabilities, security.Vulnerability{
+				Package: req.Mod.Path,
+				Version: req.Mod.Version,
+				ID:      vID,
+			})
 		}
 	}
 }

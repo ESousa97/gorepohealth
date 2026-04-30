@@ -15,10 +15,10 @@ func TestCalculateScore(t *testing.T) {
 		{
 			name: "Perfect Score",
 			health: RepoHealth{
-				HasReadme:   true,
-				HasLicense:  true,
-				HasCI:       true,
-				HasAutoTest: true,
+				HasReadme:       true,
+				HasLicense:      true,
+				HasCI:           true,
+				HasAutoTest:     true,
 				Vulnerabilities: []security.Vulnerability{},
 			},
 			expected: 100,
@@ -26,10 +26,10 @@ func TestCalculateScore(t *testing.T) {
 		{
 			name: "Missing Everything",
 			health: RepoHealth{
-				HasReadme:   false,
-				HasLicense:  false,
-				HasCI:       false,
-				HasAutoTest: false,
+				HasReadme:       false,
+				HasLicense:      false,
+				HasCI:           false,
+				HasAutoTest:     false,
 				Vulnerabilities: []security.Vulnerability{{ID: "VULN-1"}},
 			},
 			expected: 0,
@@ -37,10 +37,10 @@ func TestCalculateScore(t *testing.T) {
 		{
 			name: "Basic Docs Only",
 			health: RepoHealth{
-				HasReadme:   true,
-				HasLicense:  true,
-				HasCI:       false,
-				HasAutoTest: false,
+				HasReadme:       true,
+				HasLicense:      true,
+				HasCI:           false,
+				HasAutoTest:     false,
 				Vulnerabilities: []security.Vulnerability{},
 			},
 			expected: 70, // 10 (Readme) + 10 (License) + 50 (No Vulns)

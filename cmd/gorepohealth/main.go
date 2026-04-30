@@ -107,7 +107,16 @@ func analyzeRepositories(ctx context.Context, client *github.Client, reposToAnal
 
 func generateReports(results []health.RepoHealth, exportCSV, owner string) {
 	report.DisplayDashboard(results)
+	displayAverageScore(results)
 
+	// Ensure outputs directory exists
+	os.MkdirAll("outputs", 0755)
+
+	handleCSVExport(results, exportCSV)
+	handleMarkdownReport(results, owner)
+}
+
+func displayAverageScore(results []health.RepoHealth) {
 	if len(results) > 1 {
 		var totalScore int
 		for _, r := range results {
@@ -116,23 +125,25 @@ func generateReports(results []health.RepoHealth, exportCSV, owner string) {
 		average := float64(totalScore) / float64(len(results))
 		fmt.Printf("\nPortfolio Health Average: %.2f/100\n", average)
 	}
+}
 
-	// Ensure outputs directory exists
-	os.MkdirAll("outputs", 0755)
-
-	if exportCSV != "" {
-		csvPath := exportCSV
-		if !strings.Contains(csvPath, "/") && !strings.Contains(csvPath, "\\") {
-			csvPath = "outputs/" + csvPath
-		}
-		err := report.ExportToCSV(results, csvPath)
-		if err != nil {
-			fmt.Printf("Error exporting to CSV: %v\n", err)
-		} else {
-			fmt.Printf("Results exported to %s\n", csvPath)
-		}
+func handleCSVExport(results []health.RepoHealth, exportCSV string) {
+	if exportCSV == "" {
+		return
 	}
+	csvPath := exportCSV
+	if !strings.Contains(csvPath, "/") && !strings.Contains(csvPath, "\\") {
+		csvPath = "outputs/" + csvPath
+	}
+	err := report.ExportToCSV(results, csvPath)
+	if err != nil {
+		fmt.Printf("Error exporting to CSV: %v\n", err)
+	} else {
+		fmt.Printf("Results exported to %s\n", csvPath)
+	}
+}
 
+func handleMarkdownReport(results []health.RepoHealth, owner string) {
 	if len(results) == 1 {
 		reportPath := "outputs/health_report.md"
 		err := report.GenerateMarkdown(&results[0], owner, reportPath)

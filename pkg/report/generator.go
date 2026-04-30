@@ -16,7 +16,7 @@ func GenerateMarkdown(h *health.RepoHealth, owner, path string) error {
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("# Health Report: %s/%s\n\n", owner, h.Name))
 	buf.WriteString(fmt.Sprintf("## Overall Score: **%d/100**\n\n", h.Score))
-	
+
 	buf.WriteString("### Analysis Breakdown\n")
 	buf.WriteString(fmt.Sprintf("- **README:** %v\n", h.HasReadme))
 	buf.WriteString(fmt.Sprintf("- **LICENSE:** %v\n", h.HasLicense))
