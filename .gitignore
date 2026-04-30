@@ -5,7 +5,8 @@
 *.so
 *.dylib
 bin/
-gorepohealth
+/gorepohealth
+/gorepohealth.exe
 
 # Tooling
 .vscode/
