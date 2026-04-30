@@ -5,6 +5,8 @@
 *.so
 *.dylib
 bin/
+/dist/*
+!/dist/.gitkeep
 /gorepohealth
 /gorepohealth.exe
 

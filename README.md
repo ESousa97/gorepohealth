@@ -40,12 +40,12 @@ Build and run the tool by providing a repository path in the format `owner/repo`
 
 1. **Build the executable:**
    ```bash
-   go build -o gorepohealth
+   go build -o dist/gorepohealth ./cmd/gorepohealth/main.go
    ```
 
 2. **Run the check:**
    ```bash
-   ./gorepohealth google/go-github
+   ./dist/gorepohealth google/go-github
    ```
 
 ## Testing
