@@ -36,17 +36,32 @@ A Go-based CLI tool to check the health of a GitHub repository by verifying the 
 
 ## Usage
 
-Build and run the tool by providing a repository path in the format `owner/repo`:
+### 1. Build the executable
+Generate the binary for your operating system:
 
-1. **Build the executable:**
-   ```bash
-   go build -o dist/gorepohealth ./cmd/gorepohealth/main.go
-   ```
+**Windows:**
+```powershell
+go build -o dist/gorepohealth.exe ./cmd/gorepohealth/main.go
+```
 
-2. **Run the check:**
-   ```bash
-   ./dist/gorepohealth google/go-github
-   ```
+**Linux/macOS:**
+```bash
+go build -o dist/gorepohealth ./cmd/gorepohealth/main.go
+```
+
+### 2. Run analysis
+
+**Analyze a single repository:**
+```powershell
+./dist/gorepohealth.exe google/go-github
+```
+
+**Analyze all repositories of a user and export to CSV:**
+```powershell
+./dist/gorepohealth.exe ESousa97 --export=resultado.csv
+```
+*The CSV will be saved in the `outputs/` directory.*
+
 
 ## Testing
 
