@@ -97,6 +97,15 @@ func main() {
 
 	displayDashboard(results)
 
+	if len(results) > 1 {
+		var totalScore int
+		for _, r := range results {
+			totalScore += r.Score
+		}
+		average := float64(totalScore) / float64(len(results))
+		fmt.Printf("\nPortfolio Health Average: %.2f/100\n", average)
+	}
+
 	if *exportCSV != "" {
 		err := exportToCSV(results, *exportCSV)
 		if err != nil {
