@@ -59,61 +59,76 @@ func (h *RepoHealth) CalculateScore() {
 
 // CheckRepoHealth performs the full health audit on a specific GitHub repository.
 func CheckRepoHealth(ctx context.Context, client *github.Client, owner, repo string) (*RepoHealth, error) {
-	health := &RepoHealth{Name: repo}
+	h := &RepoHealth{Name: repo}
 
-	// 1. Check for README
+	checkReadme(ctx, client, owner, repo, h)
+	checkLicense(ctx, client, owner, repo, h)
+	checkCIAndTests(ctx, client, owner, repo, h)
+	checkVulnerabilities(ctx, client, owner, repo, h)
+
+	return h, nil
+}
+
+func checkReadme(ctx context.Context, client *github.Client, owner, repo string, h *RepoHealth) {
 	_, _, err := client.Repositories.GetReadme(ctx, owner, repo, nil)
 	if err == nil {
-		health.HasReadme = true
+		h.HasReadme = true
 	}
+}
 
-	// 2. Check for License
-	_, _, err = client.Repositories.License(ctx, owner, repo)
+func checkLicense(ctx context.Context, client *github.Client, owner, repo string, h *RepoHealth) {
+	_, _, err := client.Repositories.License(ctx, owner, repo)
 	if err == nil {
-		health.HasLicense = true
+		h.HasLicense = true
 	}
+}
 
-	// 3. Check for GitHub Actions (CI)
+func checkCIAndTests(ctx context.Context, client *github.Client, owner, repo string, h *RepoHealth) {
 	_, dirContent, _, err := client.Repositories.GetContents(ctx, owner, repo, ".github/workflows", nil)
-	if err == nil && len(dirContent) > 0 {
-		health.HasCI = true
-		for _, file := range dirContent {
-			if strings.HasSuffix(file.GetName(), ".yml") || strings.HasSuffix(file.GetName(), ".yaml") {
-				content, _, _, err := client.Repositories.GetContents(ctx, owner, repo, file.GetPath(), nil)
-				if err == nil && content != nil {
-					raw, _ := content.GetContent()
-					if strings.Contains(raw, "test") {
-						health.HasAutoTest = true
-						break
-					}
+	if err != nil || len(dirContent) == 0 {
+		return
+	}
+
+	h.HasCI = true
+	for _, file := range dirContent {
+		if strings.HasSuffix(file.GetName(), ".yml") || strings.HasSuffix(file.GetName(), ".yaml") {
+			content, _, _, err := client.Repositories.GetContents(ctx, owner, repo, file.GetPath(), nil)
+			if err == nil && content != nil {
+				raw, _ := content.GetContent()
+				if strings.Contains(raw, "test") {
+					h.HasAutoTest = true
+					break
 				}
 			}
 		}
 	}
+}
 
-	// 4. Dependency Analysis (go.mod)
+func checkVulnerabilities(ctx context.Context, client *github.Client, owner, repo string, h *RepoHealth) {
 	fileContent, _, _, err := client.Repositories.GetContents(ctx, owner, repo, "go.mod", nil)
-	if err == nil && fileContent != nil {
-		raw, _ := fileContent.GetContent()
-		f, err := modfile.Parse("go.mod", []byte(raw), nil)
-		if err == nil {
-			for _, req := range f.Require {
-				if req.Indirect {
-					continue
-				}
-				vulnIDs, err := security.CheckOSV(req.Mod.Path, req.Mod.Version)
-				if err == nil && len(vulnIDs) > 0 {
-					for _, vID := range vulnIDs {
-						health.Vulnerabilities = append(health.Vulnerabilities, security.Vulnerability{
-							Package: req.Mod.Path,
-							Version: req.Mod.Version,
-							ID:      vID,
-						})
-					}
-				}
+	if err != nil || fileContent == nil {
+		return
+	}
+
+	raw, _ := fileContent.GetContent()
+	f, err := modfile.Parse("go.mod", []byte(raw), nil)
+	if err != nil {
+		return
+	}
+
+	for _, req := range f.Require {
+		if req.Indirect {
+			continue
+		}
+		vulnIDs, err := security.CheckOSV(req.Mod.Path, req.Mod.Version)
+		if err == nil && len(vulnIDs) > 0 {
+			for _, vID := range vulnIDs {
+				h.Vulnerabilities = append(h.Vulnerabilities, security.Vulnerability{
+					Package: req.Mod.Path,
+					Version: req.Mod.Version,
+					ID:      vID,
+				})
 			}
 		}
 	}
-
-	return health, nil
 }

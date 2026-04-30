@@ -14,6 +14,16 @@ import (
 )
 
 func main() {
+	exportCSV, target := parseFlags()
+	ctx, client := initGitHubClient()
+
+	reposToAnalyze, owner := fetchRepositories(ctx, client, target)
+	results := analyzeRepositories(ctx, client, reposToAnalyze)
+
+	generateReports(results, exportCSV, owner)
+}
+
+func parseFlags() (string, string) {
 	exportCSV := flag.String("export", "", "Export results to CSV (e.g., --export=results.csv)")
 	flag.Parse()
 
@@ -36,7 +46,10 @@ func main() {
 			}
 		}
 	}
+	return *exportCSV, target
+}
 
+func initGitHubClient() (context.Context, *github.Client) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		fmt.Println("Error: GITHUB_TOKEN environment variable not set")
@@ -46,8 +59,10 @@ func main() {
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
+	return ctx, github.NewClient(tc)
+}
 
+func fetchRepositories(ctx context.Context, client *github.Client, target string) ([]string, string) {
 	var reposToAnalyze []string
 	var owner string
 
@@ -68,14 +83,17 @@ func main() {
 			reposToAnalyze = append(reposToAnalyze, fmt.Sprintf("%s/%s", owner, r.GetName()))
 		}
 	}
+	return reposToAnalyze, owner
+}
 
+func analyzeRepositories(ctx context.Context, client *github.Client, reposToAnalyze []string) []health.RepoHealth {
 	results := []health.RepoHealth{}
 	for _, repoPath := range reposToAnalyze {
 		parts := strings.Split(repoPath, "/")
 		repoOwner := parts[0]
 		repoName := parts[1]
 		fmt.Printf("Analyzing %s...\n", repoPath)
-		
+
 		res, err := health.CheckRepoHealth(ctx, client, repoOwner, repoName)
 		if err != nil {
 			fmt.Printf("  Error analyzing %s: %v\n", repoName, err)
@@ -84,7 +102,10 @@ func main() {
 		res.CalculateScore()
 		results = append(results, *res)
 	}
+	return results
+}
 
+func generateReports(results []health.RepoHealth, exportCSV, owner string) {
 	report.DisplayDashboard(results)
 
 	if len(results) > 1 {
@@ -99,8 +120,8 @@ func main() {
 	// Ensure outputs directory exists
 	os.MkdirAll("outputs", 0755)
 
-	if *exportCSV != "" {
-		csvPath := *exportCSV
+	if exportCSV != "" {
+		csvPath := exportCSV
 		if !strings.Contains(csvPath, "/") && !strings.Contains(csvPath, "\\") {
 			csvPath = "outputs/" + csvPath
 		}
@@ -112,7 +133,7 @@ func main() {
 		}
 	}
 
-	if len(reposToAnalyze) == 1 {
+	if len(results) == 1 {
 		reportPath := "outputs/health_report.md"
 		err := report.GenerateMarkdown(&results[0], owner, reportPath)
 		if err != nil {
