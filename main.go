@@ -47,6 +47,18 @@ func main() {
 	}
 
 	target := args[0]
+
+	// Manual check for the export flag if it was passed after the target
+	if *exportCSV == "" {
+		for i, arg := range os.Args {
+			if strings.HasPrefix(arg, "--export=") {
+				*exportCSV = strings.TrimPrefix(arg, "--export=")
+			} else if arg == "--export" && i+1 < len(os.Args) {
+				*exportCSV = os.Args[i+1]
+			}
+		}
+	}
+
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		fmt.Println("Error: GITHUB_TOKEN environment variable not set")
