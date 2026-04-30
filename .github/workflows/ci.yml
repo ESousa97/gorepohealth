@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: Test and Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run Unit Tests
+        run: go test ./... -v
+
+      - name: Build for multiple platforms
+        run: |
+          mkdir -p bin
+          GOOS=linux GOARCH=amd64 go build -o bin/gorepohealth-linux-amd64 ./cmd/gorepohealth/main.go
+          GOOS=windows GOARCH=amd64 go build -o bin/gorepohealth-windows-amd64.exe ./cmd/gorepohealth/main.go
+          GOOS=darwin GOARCH=amd64 go build -o bin/gorepohealth-darwin-amd64 ./cmd/gorepohealth/main.go
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: bin/*
