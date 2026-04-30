@@ -16,3 +16,8 @@ bin/
 
 # Go
 vendor/
+
+# Reports and Artifacts
+*.csv
+health_report.md
+

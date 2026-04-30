@@ -48,14 +48,21 @@ Build and run the tool by providing a repository path in the format `owner/repo`
    ./gorepohealth google/go-github
    ```
 
-### Example Output
-```text
-Checking health for: google/go-github
+## Testing
 
-Summary:
-- README: Found
-- LICENSE: Found
+You can run the automated test suite (Unit Tests, Build, and Integration Check) using the provided script:
+
+**Windows:**
+```powershell
+./scripts/test.bat
 ```
+
+## Project Structure
+- `cmd/gorepohealth`: Application entry point.
+- `pkg/health`: Core logic for repository analysis and scoring.
+- `pkg/security`: Vulnerability scanning via OSV.dev.
+- `pkg/report`: Terminal dashboard, CSV, and Markdown generation.
+- `scripts/`: Utility scripts for development and testing.
 
 ## How it works
 

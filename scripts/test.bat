@@ -1,5 +1,7 @@
 @echo off
 SETLOCAL
+:: Move to the project root directory
+cd %~dp0\..
 
 echo ========================================
 echo   GOREPOHEALTH - Automated Test Suite
