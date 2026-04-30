@@ -85,7 +85,7 @@ func main() {
 		results = append(results, *res)
 	}
 
-	report.DisplayDashboard(results)
+	displayDashboard(results)
 
 	if len(results) > 1 {
 		var totalScore int
@@ -96,17 +96,24 @@ func main() {
 		fmt.Printf("\nPortfolio Health Average: %.2f/100\n", average)
 	}
 
+	// Ensure outputs directory exists
+	os.MkdirAll("outputs", 0755)
+
 	if *exportCSV != "" {
-		err := report.ExportToCSV(results, *exportCSV)
+		csvPath := *exportCSV
+		if !strings.Contains(csvPath, "/") && !strings.Contains(csvPath, "\\") {
+			csvPath = "outputs/" + csvPath
+		}
+		err := report.ExportToCSV(results, csvPath)
 		if err != nil {
 			fmt.Printf("Error exporting to CSV: %v\n", err)
 		} else {
-			fmt.Printf("Results exported to %s\n", *exportCSV)
+			fmt.Printf("Results exported to %s\n", csvPath)
 		}
 	}
 
 	if len(reposToAnalyze) == 1 {
-		reportPath := "health_report.md"
+		reportPath := "outputs/health_report.md"
 		err := report.GenerateMarkdown(&results[0], owner, reportPath)
 		if err != nil {
 			fmt.Printf("Error generating report: %v\n", err)
@@ -114,4 +121,4 @@ func main() {
 			fmt.Printf("\nDetailed report generated: %s\n", reportPath)
 		}
 	}
-}
+	}

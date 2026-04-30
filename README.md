@@ -63,6 +63,8 @@ You can run the automated test suite (Unit Tests, Build, and Integration Check) 
 - `pkg/security`: Vulnerability scanning via OSV.dev.
 - `pkg/report`: Terminal dashboard, CSV, and Markdown generation.
 - `scripts/`: Utility scripts for development and testing.
+- `outputs/`: Analysis artifacts (CSV and Markdown reports).
+- `dist/`: Local build binaries.
 
 ## How it works
 

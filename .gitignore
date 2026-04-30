@@ -20,6 +20,8 @@ bin/
 vendor/
 
 # Reports and Artifacts
+/outputs/*
+!/outputs/.gitkeep
 *.csv
 health_report.md
 
